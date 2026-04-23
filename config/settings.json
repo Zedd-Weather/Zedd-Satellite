@@ -1,0 +1,64 @@
+{
+  "station": {
+    "name": "Default Ground Station",
+    "latitude_deg": 0.0,
+    "longitude_deg": 0.0,
+    "elevation_m": 0.0,
+    "timezone": "UTC"
+  },
+  "sdr": {
+    "device_index": 0,
+    "gain": 42.0,
+    "ppm_correction": 0,
+    "sample_rate_hz": 48000,
+    "rtl_fm_binary": "rtl_fm",
+    "sox_binary": "sox"
+  },
+  "pass_filter": {
+    "min_elevation_deg": 20.0,
+    "look_ahead_hours": 24,
+    "lead_in_seconds": 5,
+    "lead_out_seconds": 5
+  },
+  "tle": {
+    "cache_file": "config/weather.tle",
+    "max_age_hours": 12,
+    "sources": [
+      "https://celestrak.org/NORAD/elements/gp.php?GROUP=weather&FORMAT=tle",
+      "https://celestrak.org/NORAD/elements/gp.php?GROUP=noaa&FORMAT=tle"
+    ]
+  },
+  "satellites": {
+    "NOAA 15": {
+      "frequency_mhz": 137.620,
+      "mode": "NOAA_APT",
+      "tle_name": "NOAA 15"
+    },
+    "NOAA 18": {
+      "frequency_mhz": 137.9125,
+      "mode": "NOAA_APT",
+      "tle_name": "NOAA 18"
+    },
+    "NOAA 19": {
+      "frequency_mhz": 137.100,
+      "mode": "NOAA_APT",
+      "tle_name": "NOAA 19"
+    },
+    "METEOR-M 2": {
+      "frequency_mhz": 137.900,
+      "mode": "METEOR_LRPT",
+      "tle_name": "METEOR-M2 2"
+    }
+  },
+  "decoder": {
+    "wxtoimg_binary": "wxtoimg",
+    "meteor_demod_binary": "meteor-demod",
+    "noaa_enhancement": "MCIR",
+    "output_dir": "output"
+  },
+  "paths": {
+    "output_dir": "output",
+    "log_dir": "logs",
+    "log_file": "logs/zedd-satellite.log"
+  }
+}

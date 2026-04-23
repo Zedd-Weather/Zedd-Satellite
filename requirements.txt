@@ -1,0 +1,20 @@
+# Core runtime dependencies for Zedd-Satellite.
+#
+# These are the only Python packages required to run the daemon end-to-end.
+# Pin lower bounds that are known to expose the APIs we rely on; do not pin
+# upper bounds so that security patches are pulled in transparently.
+
+# Orbital propagation / pass prediction (TLE -> AOS/LOS).
+skyfield>=1.46
+
+# In-process job scheduler used by main.py to queue future captures.
+apscheduler>=3.10
+
+# HTTP client used by core.tracker to download TLE files when the bash
+# helper script is not available (e.g. first run from Python directly).
+requests>=2.31
+
+# Timezone helpers (skyfield returns UTC; APScheduler accepts pytz/zoneinfo).
+# Python 3.9+ ships zoneinfo in the stdlib, but pytz is still required by
+# APScheduler 3.x for some backends.
+pytz>=2023.3
