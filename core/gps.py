@@ -158,10 +158,8 @@ class GPSReader:
                 lon = float(packet.lon)
                 alt = float(packet.alt) if getattr(packet, "mode", 0) >= 3 else 0.0
                 fix_time = self._parse_gpsd_time(getattr(packet, "time", None))
-                LOGGER.info(
-                    "GPS fix via gpsd: lat=%.2f lon=%.2f alt=%.1fm",
-                    lat, lon, alt,
-                )
+                LOGGER.info("GPS fix acquired via gpsd (mode=%d)",
+                            getattr(packet, "mode", 0))
                 return GPSFix(
                     latitude_deg=lat,
                     longitude_deg=lon,
@@ -222,10 +220,7 @@ class GPSReader:
                     except (TypeError, ValueError):
                         continue
                     fix_time = self._combine_nmea_time(msg.timestamp)
-                    LOGGER.info(
-                        "GPS fix via serial: lat=%.2f lon=%.2f alt=%.1fm",
-                        lat, lon, alt,
-                    )
+                    LOGGER.info("GPS fix acquired via serial NMEA")
                     return GPSFix(
                         latitude_deg=lat,
                         longitude_deg=lon,

@@ -235,12 +235,10 @@ class Daemon:
         station["latitude_deg"] = fix.latitude_deg
         station["longitude_deg"] = fix.longitude_deg
         station["elevation_m"] = fix.elevation_m
-        # Log at coarse (~1 km) precision so the operator's exact home
-        # location is not written to disk-rotated log files.
+        # Do not log the coordinates themselves -- they identify the
+        # operator's physical location.
         LOGGER.info(
-            "Station coordinates disciplined by GPS (%s): "
-            "lat=%.2f lon=%.2f alt=%.1fm",
-            fix.source, fix.latitude_deg, fix.longitude_deg, fix.elevation_m,
+            "Station coordinates disciplined by GPS (source=%s)", fix.source,
         )
 
     # ------------------------------------------------------------------ API
