@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Skyfield ephemeris cache
+config/.skyfield-cache/
+
+# Runtime artifacts
+logs/*.log*
+output/*.wav
+output/*.png
+
+# Local TLE cache
+config/*.tle
