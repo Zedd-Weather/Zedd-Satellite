@@ -66,6 +66,14 @@ Zedd-Satellite/
 │   ├── lora.py               # SX1262 LoRa HAT driver (heartbeat / payload RX)
 │   ├── health.py             # Pi 5 thermal / throttle / disk / SDR monitor
 │   └── storage.py            # Mirrors output to redundant directories
+├── frontend/
+│   ├── __init__.py
+│   ├── __main__.py           # `python -m frontend` -- launch the dashboard
+│   ├── app.py                # Flask app: HTML dashboard + JSON API
+│   ├── templates/
+│   │   └── dashboard.html    # Server-rendered operator dashboard
+│   └── static/
+│       └── style.css         # Dark, dependency-free dashboard theme
 ├── scripts/
 │   ├── update_tle.sh         # Downloads the latest TLE files
 │   └── setup_env.sh          # Installs apt + python dependencies
@@ -139,6 +147,46 @@ After a successful pass you will find, in `output/`:
 * `NOAA_19_2025-04-23T18-12-04Z.png` – the decoded image.
 
 Logs are written to `logs/zedd-satellite.log` (rotated daily).
+
+## Web Dashboard
+
+A read-only Flask front end ships in [`frontend/`](frontend) and gives
+operators a live view of the daemon without having to `tail -f` log
+files or `scp` PNGs off the Pi.
+
+```bash
+# In a second shell on the Pi (the daemon can keep running):
+python3 -m frontend                    # binds 0.0.0.0:8080
+python3 -m frontend --host 127.0.0.1   # loopback only
+python3 -m frontend --port 9000 --debug
+```
+
+Then open `http://<pi-host>:8080/` from any device on the LAN. The
+dashboard surfaces:
+
+* Station identity (name, lat/lon, elevation, timezone).
+* Current Pi 5 health snapshot (CPU temp, throttle / under-voltage
+  flags, RTL-SDR count, per-disk free space bars).
+* Upcoming satellite passes inside the configured look-ahead window
+  (satellite, mode, frequency, AOS / LOS / max elevation / duration).
+* A gallery of every WAV / PNG in `output/`, newest first, with inline
+  image previews and audio playback.
+* The last lines of `logs/zedd-satellite.log`.
+
+The same data is exposed as JSON for scripting and external monitoring:
+
+| Endpoint          | Purpose                                  |
+|-------------------|------------------------------------------|
+| `GET /api/status` | Station info + latest health snapshot.   |
+| `GET /api/passes` | Upcoming `PassEvent` list.               |
+| `GET /api/captures` | Files in `output/` (kind, size, mtime).|
+| `GET /api/logs`   | Tail of the daemon log file.             |
+
+The front end is intentionally read-only — it only reads
+`config/settings.json`, `output/`, and `logs/`, and never mutates daemon
+state. It is safe to expose alongside the running daemon on a trusted
+LAN; place it behind a reverse proxy (e.g. nginx + basic auth or
+WireGuard) before exposing it to the public internet.
 
 ## License
 
