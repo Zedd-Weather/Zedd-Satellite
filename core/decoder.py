@@ -18,7 +18,7 @@ import shutil
 import subprocess
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Dict, List
+from typing import Callable, Dict, List, Optional
 
 from core.capture import CaptureResult
 
@@ -64,6 +64,15 @@ class Decoder:
         self._noaa_enhancement: str = decoder_cfg.get(
             "noaa_enhancement", "MCIR"
         )
+        # Redundant decoder chains. Each entry is the binary name of an
+        # alternate decoder tried in order if the primary fails. Format
+        # is identical to the primary (-o output input).
+        self._noaa_fallbacks: List[str] = list(
+            decoder_cfg.get("noaa_fallbacks", ["noaa-apt"]) or []
+        )
+        self._meteor_fallbacks: List[str] = list(
+            decoder_cfg.get("meteor_fallbacks", ["medet"]) or []
+        )
         self._output_dir: str = decoder_cfg.get(
             "output_dir",
             settings.get("paths", {}).get("output_dir", "output"),
@@ -104,53 +113,95 @@ class Decoder:
 
     # --------------------------------------------------------- internals
     def _decode_noaa(self, capture: CaptureResult) -> DecodeResult:
-        """Run ``wxtoimg`` against a NOAA APT WAV recording."""
-        if shutil.which(self._wxtoimg) is None:
-            raise DecoderError(
-                f"NOAA decoder binary {self._wxtoimg!r} not found on $PATH"
-            )
-
-        image_path = self._build_image_path(capture)
-        cmd: List[str] = [
-            self._wxtoimg,
+        """Decode a NOAA APT WAV, trying redundant backends in order."""
+        primary_cmd_factory = lambda binary, image_path: [
+            binary,
             "-e", self._noaa_enhancement,
             "-o",
             capture.wav_path,
             image_path,
         ]
-        self._run(cmd, "wxtoimg")
-        self._assert_image(image_path)
-        return DecodeResult(
-            image_path=os.path.abspath(image_path),
-            source_wav=capture.wav_path,
-            decoder="wxtoimg",
-            decoded_at=datetime.now(timezone.utc),
+        # noaa-apt fallback uses a different argv layout: <input> <output>.
+        fallback_cmd_factory = lambda binary, image_path: [
+            binary, capture.wav_path, image_path,
+        ]
+        return self._decode_with_fallbacks(
+            capture,
+            primary=self._wxtoimg,
+            primary_cmd_factory=primary_cmd_factory,
+            fallbacks=self._noaa_fallbacks,
+            fallback_cmd_factory=fallback_cmd_factory,
+            kind="NOAA",
         )
 
     def _decode_meteor(self, capture: CaptureResult) -> DecodeResult:
-        """Run ``meteor-demod`` against a Meteor-M2 LRPT WAV recording."""
-        if shutil.which(self._meteor_demod) is None:
-            raise DecoderError(
-                f"Meteor decoder binary {self._meteor_demod!r} not found "
-                "on $PATH"
-            )
-
-        image_path = self._build_image_path(capture)
-        # meteor-demod typically emits a soft-symbol .s file that is then
-        # piped through medet to produce the PNG. Many distributions ship
-        # a wrapper that performs the full chain when given -o <png>.
-        cmd: List[str] = [
-            self._meteor_demod,
-            "-o", image_path,
-            capture.wav_path,
+        """Decode a Meteor-M2 LRPT WAV, trying redundant backends in order."""
+        primary_cmd_factory = lambda binary, image_path: [
+            binary, "-o", image_path, capture.wav_path,
         ]
-        self._run(cmd, "meteor-demod")
-        self._assert_image(image_path)
-        return DecodeResult(
-            image_path=os.path.abspath(image_path),
-            source_wav=capture.wav_path,
-            decoder="meteor-demod",
-            decoded_at=datetime.now(timezone.utc),
+        # medet uses positional input + -o output.
+        fallback_cmd_factory = lambda binary, image_path: [
+            binary, capture.wav_path, image_path,
+        ]
+        return self._decode_with_fallbacks(
+            capture,
+            primary=self._meteor_demod,
+            primary_cmd_factory=primary_cmd_factory,
+            fallbacks=self._meteor_fallbacks,
+            fallback_cmd_factory=fallback_cmd_factory,
+            kind="Meteor",
+        )
+
+    def _decode_with_fallbacks(
+        self,
+        capture: CaptureResult,
+        primary: str,
+        primary_cmd_factory: Callable[[str, str], List[str]],
+        fallbacks: List[str],
+        fallback_cmd_factory: Callable[[str, str], List[str]],
+        kind: str,
+    ) -> DecodeResult:
+        """Run ``primary`` then each entry in ``fallbacks`` until one wins."""
+        attempts: List[tuple] = [(primary, primary_cmd_factory)]
+        attempts.extend((b, fallback_cmd_factory) for b in fallbacks)
+
+        last_error: Optional[Exception] = None
+        for binary, factory in attempts:
+            if shutil.which(binary) is None:
+                LOGGER.warning(
+                    "%s decoder %r not on $PATH; trying next fallback",
+                    kind, binary,
+                )
+                continue
+            image_path = self._build_image_path(capture)
+            try:
+                self._run(factory(binary, image_path), binary)
+                self._assert_image(image_path)
+                LOGGER.info(
+                    "%s decode succeeded with %s -> %s",
+                    kind, binary, image_path,
+                )
+                return DecodeResult(
+                    image_path=os.path.abspath(image_path),
+                    source_wav=capture.wav_path,
+                    decoder=binary,
+                    decoded_at=datetime.now(timezone.utc),
+                )
+            except DecoderError as exc:
+                last_error = exc
+                LOGGER.warning(
+                    "%s decode with %s failed: %s", kind, binary, exc
+                )
+                # Clean up partial output before trying the next backend.
+                try:
+                    if os.path.isfile(image_path):
+                        os.remove(image_path)
+                except OSError:
+                    pass
+
+        raise DecoderError(
+            f"All {kind} decoders failed for {capture.wav_path}; "
+            f"last error: {last_error}"
         )
 
     def _build_image_path(self, capture: CaptureResult) -> str:

@@ -8,11 +8,14 @@
   },
   "sdr": {
     "device_index": 0,
+    "device_indexes": [0],
     "gain": 42.0,
     "ppm_correction": 0,
     "sample_rate_hz": 48000,
     "rtl_fm_binary": "rtl_fm",
-    "sox_binary": "sox"
+    "sox_binary": "sox",
+    "bias_tee": false,
+    "rtl_biast_binary": "rtl_biast"
   },
   "pass_filter": {
     "min_elevation_deg": 20.0,
@@ -54,11 +57,47 @@
     "wxtoimg_binary": "wxtoimg",
     "meteor_demod_binary": "meteor-demod",
     "noaa_enhancement": "MCIR",
+    "noaa_fallbacks": ["noaa-apt"],
+    "meteor_fallbacks": ["medet"],
     "output_dir": "output"
   },
   "paths": {
     "output_dir": "output",
     "log_dir": "logs",
     "log_file": "logs/zedd-satellite.log"
+  },
+  "storage": {
+    "mirror_dirs": []
+  },
+  "gps": {
+    "enabled": false,
+    "gpsd_host": "127.0.0.1",
+    "gpsd_port": 2947,
+    "serial_port": "/dev/ttyACM0",
+    "serial_baud": 9600,
+    "read_timeout_s": 5.0,
+    "discipline_station": false,
+    "max_clock_drift_s": 2.0
+  },
+  "lora": {
+    "enabled": false,
+    "spi_bus": 0,
+    "spi_device": 0,
+    "spi_speed_hz": 2000000,
+    "reset_pin": 22,
+    "busy_pin": 23,
+    "dio1_pin": 26,
+    "frequency_hz": 868000000,
+    "spreading_factor": 9,
+    "bandwidth_hz": 125000,
+    "coding_rate": 5,
+    "tx_power_dbm": 14,
+    "heartbeat_period_s": 300
+  },
+  "health": {
+    "enabled": true,
+    "period_s": 300,
+    "cpu_temp_warn_c": 75.0,
+    "disk_free_warn_pct": 10.0
   }
 }

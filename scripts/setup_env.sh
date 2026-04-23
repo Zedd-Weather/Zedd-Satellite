@@ -21,11 +21,16 @@ APT_PACKAGES=(
     python3
     python3-pip
     python3-venv
+    # GPS daemon + clients (for the u-blox USB receiver)
+    gpsd
+    gpsd-clients
+    # SPI userland tools (the SX1262 LoRa HAT uses /dev/spidev0.0)
+    python3-spidev
+    python3-rpi.gpio
 )
 
-# wxtoimg is no longer in Debian's repos; users must install the Linux
-# .deb manually. We only check for it here and warn if it is missing.
-WARN_BINARIES=(wxtoimg meteor-demod)
+# Optional decoder + LNA-control binaries; warned about but not auto-installed.
+WARN_BINARIES=(wxtoimg meteor-demod noaa-apt medet rtl_biast)
 
 echo "[setup_env] Installing apt packages..."
 if [[ "$(id -u)" -ne 0 ]]; then
@@ -48,6 +53,13 @@ for bin in "${WARN_BINARIES[@]}"; do
         echo "             Install it manually (see README.md) to enable decoding."
     fi
 done
+
+# Reminder for SPI users: the LoRa HAT requires SPI to be enabled in
+# raspi-config (Interface Options -> SPI).
+if [[ -e /boot/config.txt ]] && ! grep -qE '^dtparam=spi=on' /boot/config.txt 2>/dev/null; then
+    echo "[setup_env] NOTE: SPI does not appear to be enabled."
+    echo "             Run 'sudo raspi-config' -> Interface Options -> SPI to enable the LoRa HAT."
+fi
 
 mkdir -p "${REPO_ROOT}/logs" "${REPO_ROOT}/output"
 chmod +x "${REPO_ROOT}/scripts/"*.sh

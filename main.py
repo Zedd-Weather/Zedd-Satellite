@@ -26,9 +26,14 @@ from typing import Dict, Optional, Set
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.date import DateTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 
 from core.capture import Capture, CaptureError, CaptureResult
 from core.decoder import Decoder, DecoderError
+from core.gps import GPSReader
+from core.health import HealthMonitor, HealthSnapshot
+from core.lora import LoRaSX1262, LoRaUnavailable, LoRaError
+from core.storage import MirroredStorage
 from core.tracker import PassEvent, TLEError, Tracker
 
 LOGGER = logging.getLogger("zedd_satellite")
@@ -98,6 +103,7 @@ def _execute_pass(
     event: PassEvent,
     capture: Capture,
     decoder: Decoder,
+    storage: MirroredStorage,
 ) -> None:
     """Capture and decode a single pass.
 
@@ -121,6 +127,7 @@ def _execute_pass(
         return
 
     LOGGER.info("Capture complete: %s", result.wav_path)
+    storage.mirror(result.wav_path)
     try:
         decode_result = decoder.decode(result)
     except DecoderError as exc:
@@ -135,6 +142,33 @@ def _execute_pass(
         decode_result.image_path,
         decode_result.decoder,
     )
+    storage.mirror(decode_result.image_path)
+
+
+def _emit_health_beacon(
+    health: HealthMonitor,
+    lora: Optional[LoRaSX1262],
+) -> None:
+    """Sample station health and -- if LoRa is enabled -- transmit a beacon.
+
+    Always executes the local sample so warnings are emitted even when
+    the radio is offline.
+    """
+    try:
+        snap: HealthSnapshot = health.sample()
+    except Exception as exc:  # pragma: no cover - defensive
+        LOGGER.exception("Health snapshot failed: %s", exc)
+        return
+    LOGGER.info("Health snapshot: %s", snap.to_json())
+
+    if lora is None or not lora.enabled:
+        return
+    try:
+        lora.transmit(snap.to_json().encode("utf-8"))
+    except LoRaError as exc:
+        LOGGER.warning("LoRa heartbeat TX failed: %s", exc)
+    except Exception as exc:  # pragma: no cover - defensive
+        LOGGER.exception("Unexpected LoRa error: %s", exc)
 
 
 class Daemon:
@@ -151,14 +185,61 @@ class Daemon:
         scheduler: Optional[BackgroundScheduler] = None,
     ) -> None:
         self._settings = settings
+        # Apply GPS-derived station coordinates BEFORE building Tracker
+        # so the very first pass prediction uses the live fix.
+        self._gps = GPSReader(settings)
+        self._apply_gps_to_settings(settings)
         self._tracker = Tracker(settings)
         self._capture = Capture(settings)
         self._decoder = Decoder(settings)
+        self._storage = MirroredStorage(settings)
+        self._health = HealthMonitor(settings)
+        self._lora: Optional[LoRaSX1262] = self._init_lora(settings)
         self._scheduler: BackgroundScheduler = scheduler or BackgroundScheduler(
             timezone="UTC"
         )
         self._scheduled: Set[str] = set()
         self._stopping = False
+
+    @staticmethod
+    def _init_lora(settings: Dict) -> Optional[LoRaSX1262]:
+        """Construct + open the LoRa radio if it is enabled in config."""
+        radio = LoRaSX1262(settings)
+        if not radio.enabled:
+            return None
+        try:
+            radio.open()
+        except LoRaUnavailable as exc:
+            LOGGER.warning(
+                "LoRa subsystem enabled but unavailable: %s. "
+                "Continuing without it.", exc,
+            )
+            return None
+        return radio
+
+    def _apply_gps_to_settings(self, settings: Dict) -> None:
+        """If GPS is enabled, override station coords with a live fix."""
+        if not self._gps.enabled:
+            return
+        fix = self._gps.read_fix()
+        if fix is None:
+            LOGGER.warning(
+                "GPS enabled but no fix available; using configured "
+                "station coordinates"
+            )
+            return
+        self._gps.check_clock_drift(fix)
+        if not self._gps.discipline_station:
+            return
+        station = settings.setdefault("station", {})
+        station["latitude_deg"] = fix.latitude_deg
+        station["longitude_deg"] = fix.longitude_deg
+        station["elevation_m"] = fix.elevation_m
+        # Do not log the coordinates themselves -- they identify the
+        # operator's physical location.
+        LOGGER.info(
+            "Station coordinates disciplined by GPS (source=%s)", fix.source,
+        )
 
     # ------------------------------------------------------------------ API
     def run(self) -> None:
@@ -168,6 +249,7 @@ class Daemon:
 
         LOGGER.info("Zedd-Satellite daemon starting")
         self._scheduler.start()
+        self._schedule_health_job()
         try:
             while not self._stopping:
                 self._refresh_passes()
@@ -175,7 +257,29 @@ class Daemon:
         finally:
             LOGGER.info("Shutting down scheduler")
             self._scheduler.shutdown(wait=False)
+            if self._lora is not None:
+                self._lora.close()
             LOGGER.info("Daemon stopped")
+
+    def _schedule_health_job(self) -> None:
+        """Queue a recurring health snapshot + LoRa heartbeat job."""
+        if not self._health.enabled and (self._lora is None or not self._lora.enabled):
+            return
+        period = (
+            self._lora.heartbeat_period_s
+            if self._lora is not None and self._lora.enabled
+            else self._health.period_s
+        )
+        self._scheduler.add_job(
+            _emit_health_beacon,
+            trigger=IntervalTrigger(seconds=period),
+            args=[self._health, self._lora],
+            id="health-beacon",
+            name="health snapshot + LoRa beacon",
+            replace_existing=True,
+            next_run_time=datetime.now(timezone.utc),
+        )
+        LOGGER.info("Scheduled health/LoRa beacon every %ds", period)
 
     # --------------------------------------------------------- internals
     def _handle_signal(self, signum: int, _frame) -> None:
@@ -219,7 +323,7 @@ class Daemon:
             self._scheduler.add_job(
                 _execute_pass,
                 trigger=trigger,
-                args=[event, self._capture, self._decoder],
+                args=[event, self._capture, self._decoder, self._storage],
                 id=key,
                 name=f"capture {event.satellite}",
                 misfire_grace_time=30,
