@@ -4,6 +4,9 @@
 # Pin lower bounds that are known to expose the APIs we rely on; do not pin
 # upper bounds so that security patches are pulled in transparently.
 
+# Web framework powering the operator dashboard in `frontend/`.
+flask>=3.0
+
 # Orbital propagation / pass prediction (TLE -> AOS/LOS).
 skyfield>=1.46
 

@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Zedd-Satellite — Ground Station Dashboard</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">📡</span>
+      <div>
+        <h1>Zedd-Satellite</h1>
+        <p class="subtitle">{{ station.get('name', 'Unnamed station') }}</p>
+      </div>
+    </div>
+    <div class="meta">
+      <span class="badge">UTC {{ generated_at }}</span>
+      <button id="refresh" type="button" class="btn">Refresh</button>
+    </div>
+  </header>
+
+  <main class="grid">
+    <!-- Station -->
+    <section class="card">
+      <h2>Station</h2>
+      <dl class="kv">
+        <dt>Name</dt>     <dd>{{ station.get('name', '—') }}</dd>
+        <dt>Latitude</dt> <dd>{{ '%.4f'|format(station.get('latitude_deg', 0.0)) }}°</dd>
+        <dt>Longitude</dt><dd>{{ '%.4f'|format(station.get('longitude_deg', 0.0)) }}°</dd>
+        <dt>Elevation</dt><dd>{{ '%.1f'|format(station.get('elevation_m', 0.0)) }} m</dd>
+        <dt>Timezone</dt> <dd>{{ station.get('timezone', 'UTC') }}</dd>
+      </dl>
+    </section>
+
+    <!-- Health -->
+    <section class="card">
+      <h2>Health</h2>
+      {% if health %}
+        <dl class="kv">
+          <dt>CPU temp</dt>
+          <dd>
+            {% if health.cpu_temp_c is not none %}
+              {{ '%.1f'|format(health.cpu_temp_c) }} °C
+            {% else %}—{% endif %}
+          </dd>
+          <dt>Throttled</dt>
+          <dd>
+            <span class="pill {{ 'bad' if health.throttled_now else 'ok' }}">
+              {{ 'YES' if health.throttled_now else 'no' }}
+            </span>
+          </dd>
+          <dt>Under-voltage</dt>
+          <dd>
+            <span class="pill {{ 'bad' if health.under_voltage_now else 'ok' }}">
+              {{ 'YES' if health.under_voltage_now else 'no' }}
+            </span>
+          </dd>
+          <dt>SDR count</dt>
+          <dd>
+            <span class="pill {{ 'ok' if health.sdr_count > 0 else 'bad' }}">
+              {{ health.sdr_count }}
+            </span>
+            <span class="muted">({{ health.sdr_source or 'n/a' }})</span>
+          </dd>
+        </dl>
+        {% if health.disk_usage %}
+          <h3>Disks</h3>
+          <ul class="disks">
+            {% for path, usage in health.disk_usage.items() %}
+              <li>
+                <span class="path">{{ path }}</span>
+                <span class="bar" title="{{ 100 - usage.free_pct }}% used">
+                  <span class="bar-fill"
+                        style="width: {{ 100 - usage.free_pct }}%"></span>
+                </span>
+                <span class="muted">{{ 100 - usage.free_pct }}% used</span>
+              </li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+      {% else %}
+        <p class="muted">No health snapshot available.</p>
+      {% endif %}
+    </section>
+
+    <!-- Upcoming passes -->
+    <section class="card wide">
+      <h2>Upcoming passes</h2>
+      {% if pass_error %}
+        <p class="error">{{ pass_error }}</p>
+      {% endif %}
+      {% if passes %}
+        <table class="passes">
+          <thead>
+            <tr>
+              <th>Satellite</th>
+              <th>Mode</th>
+              <th>Freq (MHz)</th>
+              <th>AOS (UTC)</th>
+              <th>LOS (UTC)</th>
+              <th>Max el</th>
+              <th>Duration</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in passes %}
+              <tr>
+                <td>{{ p.satellite }}</td>
+                <td><span class="mode mode-{{ p.mode|lower }}">{{ p.mode }}</span></td>
+                <td>{{ '%.4f'|format(p.frequency_mhz) }}</td>
+                <td>{{ p.aos_utc }}</td>
+                <td>{{ p.los_utc }}</td>
+                <td>{{ '%.1f'|format(p.max_elevation_deg) }}°</td>
+                <td>{{ p.duration_seconds }} s</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% elif not pass_error %}
+        <p class="muted">No qualifying passes in the look-ahead window.</p>
+      {% endif %}
+    </section>
+
+    <!-- Captures gallery -->
+    <section class="card wide">
+      <h2>Captures</h2>
+      {% if artifacts %}
+        <div class="gallery">
+          {% for a in artifacts %}
+            <figure class="tile">
+              {% if a.kind == 'image' %}
+                <a href="{{ url_for('serve_output', filename=a.name) }}">
+                  <img src="{{ url_for('serve_output', filename=a.name) }}"
+                       alt="{{ a.name }}" loading="lazy">
+                </a>
+              {% else %}
+                <audio controls preload="none"
+                       src="{{ url_for('serve_output', filename=a.name) }}"></audio>
+              {% endif %}
+              <figcaption>
+                <span class="name">{{ a.name }}</span>
+                <span class="muted">
+                  {{ (a.size_bytes / 1024 / 1024)|round(2) }} MiB
+                  · {{ a.modified_utc }}
+                </span>
+              </figcaption>
+            </figure>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="muted">No captures yet — the daemon will populate this gallery
+          after the first successful pass.</p>
+      {% endif %}
+    </section>
+
+    <!-- Logs -->
+    <section class="card wide">
+      <h2>Recent log</h2>
+      {% if log_lines %}
+        <pre class="log">{% for line in log_lines %}{{ line }}
+{% endfor %}</pre>
+      {% else %}
+        <p class="muted">No log file found.</p>
+      {% endif %}
+    </section>
+  </main>
+
+  <footer class="foot">
+    <span>Zedd-Satellite dashboard · read-only view of the daemon state</span>
+  </footer>
+
+  <script>
+    document.getElementById('refresh').addEventListener('click', function () {
+      window.location.reload();
+    });
+  </script>
+</body>
+</html>
