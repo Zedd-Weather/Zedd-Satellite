@@ -18,3 +18,17 @@ requests>=2.31
 # Python 3.9+ ships zoneinfo in the stdlib, but pytz is still required by
 # APScheduler 3.x for some backends.
 pytz>=2023.3
+
+# GPS support (real hardware): gpsd-py3 talks to the system gpsd daemon
+# (primary path); pyserial + pynmea2 are the redundant fallback that
+# reads NMEA sentences directly from the receiver's USB serial port.
+gpsd-py3>=0.3.0
+pyserial>=3.5
+pynmea2>=1.19.0
+
+# SX1262 LoRa HAT (Raspberry Pi only). Installed from apt by setup_env.sh
+# as system packages (python3-spidev, python3-rpi.gpio) so they bind to
+# the kernel SPI / GPIO drivers; the entries below are listed only for
+# documentation / non-Pi development environments.
+spidev>=3.6 ; platform_machine == "aarch64" or platform_machine == "armv7l"
+RPi.GPIO>=0.7.1 ; platform_machine == "aarch64" or platform_machine == "armv7l"

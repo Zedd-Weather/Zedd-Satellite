@@ -21,7 +21,7 @@ import subprocess
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 from core.tracker import PassEvent
 
@@ -68,10 +68,19 @@ class Capture:
         sdr_cfg = settings["sdr"]
         self._rtl_fm: str = sdr_cfg.get("rtl_fm_binary", "rtl_fm")
         self._sox: str = sdr_cfg.get("sox_binary", "sox")
-        self._device_index: int = int(sdr_cfg.get("device_index", 0))
+        # Redundant SDR support: prefer the explicit list when present,
+        # otherwise fall back to the legacy single device_index field.
+        device_indexes = sdr_cfg.get("device_indexes")
+        if device_indexes:
+            self._device_indexes: List[int] = [int(i) for i in device_indexes]
+        else:
+            self._device_indexes = [int(sdr_cfg.get("device_index", 0))]
         self._gain: float = float(sdr_cfg.get("gain", 42.0))
         self._ppm: int = int(sdr_cfg.get("ppm_correction", 0))
         self._sample_rate: int = int(sdr_cfg.get("sample_rate_hz", 48000))
+        # Bias-tee powers the SAWbird+ NOAA LNA up the coax.
+        self._bias_tee: bool = bool(sdr_cfg.get("bias_tee", False))
+        self._rtl_biast: str = sdr_cfg.get("rtl_biast_binary", "rtl_biast")
 
         paths_cfg = settings.get("paths", {})
         self._output_dir: str = paths_cfg.get("output_dir", "output")
@@ -119,18 +128,6 @@ class Capture:
             else NOAA_TARGET_SAMPLE_RATE
         )
 
-        rtl_cmd = [
-            self._rtl_fm,
-            "-d", str(self._device_index),
-            "-f", f"{pass_event.frequency_mhz}M",
-            "-M", "fm",
-            "-s", str(self._sample_rate),
-            "-g", f"{self._gain}",
-            "-p", str(self._ppm),
-            "-E", "deemp",
-            "-F", "9",
-            "-",
-        ]
         sox_cmd = [
             self._sox,
             "-t", "raw",
@@ -144,45 +141,108 @@ class Capture:
             "rate", str(target_rate),
         ]
 
-        LOGGER.info(
-            "Starting capture: sat=%s freq=%.4f MHz duration=%ds -> %s",
-            pass_event.satellite,
-            pass_event.frequency_mhz,
-            duration,
-            wav_path,
-        )
-        LOGGER.debug("rtl_fm cmd: %s", " ".join(rtl_cmd))
-        LOGGER.debug("sox cmd:    %s", " ".join(sox_cmd))
-
+        last_error: Optional[Exception] = None
         started_at = datetime.now(timezone.utc)
-        try:
-            self._run_pipeline(rtl_cmd, sox_cmd, duration)
-        except FileNotFoundError as exc:
-            raise CaptureError(f"Required binary not found: {exc}") from exc
-        except subprocess.SubprocessError as exc:
-            raise CaptureError(
-                f"Capture subprocess failed for {pass_event.satellite}: {exc}"
-            ) from exc
+        for device_index in self._device_indexes:
+            rtl_cmd = [
+                self._rtl_fm,
+                "-d", str(device_index),
+                "-f", f"{pass_event.frequency_mhz}M",
+                "-M", "fm",
+                "-s", str(self._sample_rate),
+                "-g", f"{self._gain}",
+                "-p", str(self._ppm),
+                "-E", "deemp",
+                "-F", "9",
+                "-",
+            ]
 
-        if not os.path.isfile(wav_path) or os.path.getsize(wav_path) == 0:
-            raise CaptureError(
-                f"Capture produced no output: {wav_path}. "
-                "Is the RTL-SDR connected?"
+            LOGGER.info(
+                "Starting capture: sat=%s freq=%.4f MHz duration=%ds "
+                "device=%d -> %s",
+                pass_event.satellite,
+                pass_event.frequency_mhz,
+                duration,
+                device_index,
+                wav_path,
             )
+            LOGGER.debug("rtl_fm cmd: %s", " ".join(rtl_cmd))
+            LOGGER.debug("sox cmd:    %s", " ".join(sox_cmd))
 
-        LOGGER.info(
-            "Capture finished: %s (%.1f kB)",
-            wav_path,
-            os.path.getsize(wav_path) / 1024.0,
-        )
-        return CaptureResult(
-            wav_path=os.path.abspath(wav_path),
-            pass_event=pass_event,
-            started_at=started_at,
-            duration_seconds=duration,
+            self._set_bias_tee(device_index, on=True)
+            try:
+                self._run_pipeline(rtl_cmd, sox_cmd, duration)
+            except FileNotFoundError as exc:
+                # Missing binary will not be fixed by retrying on a
+                # different dongle.
+                self._set_bias_tee(device_index, on=False)
+                raise CaptureError(f"Required binary not found: {exc}") from exc
+            except subprocess.SubprocessError as exc:
+                last_error = exc
+                LOGGER.warning(
+                    "Capture on device %d failed: %s", device_index, exc
+                )
+                self._set_bias_tee(device_index, on=False)
+                continue
+
+            if os.path.isfile(wav_path) and os.path.getsize(wav_path) > 0:
+                LOGGER.info(
+                    "Capture finished: %s (%.1f kB) on device %d",
+                    wav_path,
+                    os.path.getsize(wav_path) / 1024.0,
+                    device_index,
+                )
+                self._set_bias_tee(device_index, on=False)
+                return CaptureResult(
+                    wav_path=os.path.abspath(wav_path),
+                    pass_event=pass_event,
+                    started_at=started_at,
+                    duration_seconds=duration,
+                )
+
+            LOGGER.warning(
+                "Capture on device %d produced no output; trying next SDR",
+                device_index,
+            )
+            self._set_bias_tee(device_index, on=False)
+
+        raise CaptureError(
+            f"Capture produced no output on any of {self._device_indexes}. "
+            f"Are the RTL-SDR dongles connected? Last error: {last_error}"
         )
 
     # --------------------------------------------------------- internals
+    def _set_bias_tee(self, device_index: int, on: bool) -> None:
+        """Toggle the dongle's bias-tee (powers an inline LNA up the coax).
+
+        No-ops when ``sdr.bias_tee`` is disabled in settings, when the
+        ``rtl_biast`` binary is missing, or when the call fails -- the
+        capture path must keep running even without the LNA.
+        """
+        if not self._bias_tee:
+            return
+        if shutil.which(self._rtl_biast) is None:
+            LOGGER.warning(
+                "%r not found on $PATH; cannot toggle bias-tee for the LNA",
+                self._rtl_biast,
+            )
+            return
+        try:
+            subprocess.run(
+                [self._rtl_biast, "-d", str(device_index), "-b",
+                 "1" if on else "0"],
+                check=False, capture_output=True, timeout=5.0,
+            )
+            LOGGER.debug(
+                "Bias-tee %s on device %d", "enabled" if on else "disabled",
+                device_index,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            LOGGER.warning(
+                "Bias-tee toggle (device %d, on=%s) failed: %s",
+                device_index, on, exc,
+            )
+
     def _verify_binaries(self) -> None:
         """Ensure ``rtl_fm`` and ``sox`` are on ``$PATH``.
 
