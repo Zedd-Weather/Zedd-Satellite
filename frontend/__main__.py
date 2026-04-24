@@ -2,8 +2,8 @@
 
 Usage::
 
-    python -m frontend                    # default: 0.0.0.0:8080
-    python -m frontend --host 127.0.0.1   # bind loopback only
+    python -m frontend                    # default: 127.0.0.1:8080
+    python -m frontend --host 0.0.0.0     # reverse-proxy only
     python -m frontend --port 9000        # custom port
     python -m frontend --debug            # Flask debug + reloader
 

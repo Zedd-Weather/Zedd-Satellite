@@ -101,12 +101,11 @@ nano config/settings.json
 bash scripts/update_tle.sh
 
 # 5. Run the daemon (foreground)
-python3 main.py
+python3 main.py --config config/settings.json
 ```
 
-To run as a background service, create a `systemd` unit that executes
-`python3 /opt/Zedd-Satellite/main.py` with the project directory as
-`WorkingDirectory`.
+Production-ready service, reverse-proxy, and logrotate examples now live
+under [`deploy/`](deploy).
 
 ## Configuration
 
@@ -156,12 +155,19 @@ files or `scp` PNGs off the Pi.
 
 ```bash
 # In a second shell on the Pi (the daemon can keep running):
-python3 -m frontend                    # binds 0.0.0.0:8080
-python3 -m frontend --host 127.0.0.1   # loopback only
+python3 -m frontend                    # default: 127.0.0.1:8080
+python3 -m frontend --host 0.0.0.0     # only behind a reverse proxy
 python3 -m frontend --port 9000 --debug
 ```
 
-Then open `http://<pi-host>:8080/` from any device on the LAN. The
+For commercial deployment, keep the dashboard on loopback and publish it
+through the nginx example in [`deploy/nginx/`](deploy/nginx) with TLS
+and authentication. The dashboard exposes operational metadata (station
+identity, captures, recent logs), so direct public internet exposure is
+not supported.
+
+Then open `http://127.0.0.1:8080/` locally or the authenticated reverse
+proxy endpoint. The dashboard surfaces:
 dashboard surfaces:
 
 * Station identity (name, lat/lon, elevation, timezone).
@@ -184,9 +190,34 @@ The same data is exposed as JSON for scripting and external monitoring:
 
 The front end is intentionally read-only — it only reads
 `config/settings.json`, `output/`, and `logs/`, and never mutates daemon
-state. It is safe to expose alongside the running daemon on a trusted
-LAN; place it behind a reverse proxy (e.g. nginx + basic auth or
-WireGuard) before exposing it to the public internet.
+state. It now emits restrictive security headers and defaults to a
+loopback-only bind so it can sit safely behind a reverse proxy.
+
+## Validation and CI
+
+The repository now ships with a built-in unit test suite and GitHub
+Actions workflow:
+
+```bash
+python3 -m unittest discover -s tests -v
+python3 -m compileall .
+```
+
+CI runs the same commands on every push and pull request.
+
+## Commercial Deployment Assets
+
+The repository now includes production scaffolding:
+
+* `deploy/systemd/zedd-satellite.service` – daemon unit.
+* `deploy/systemd/zedd-satellite-dashboard.service` – loopback-only dashboard unit.
+* `deploy/nginx/zedd-satellite.conf` – TLS + basic-auth reverse proxy example.
+* `deploy/logrotate/zedd-satellite` – sample log retention policy.
+* `SECURITY.md`, `SUPPORT.md`, and `docs/` – governance, runbook, release, and dependency notes.
+
+The daemon and dashboard both fail fast on malformed configuration and on
+missing required runtime binaries, which is critical for unattended
+commercial operation.
 
 ## License
 
