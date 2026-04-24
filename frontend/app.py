@@ -27,11 +27,13 @@ from typing import Any, Dict, List, Optional, Tuple
 from flask import (
     Flask,
     abort,
+    current_app,
     jsonify,
     render_template,
     send_from_directory,
 )
 
+from core.config import load_settings
 from core.health import HealthMonitor
 from core.tracker import PassEvent, TLEError, Tracker
 
@@ -44,13 +46,6 @@ _AUDIO_EXTS = {".wav"}
 # Hard cap on how many log lines a single response will return so a
 # multi-MB log file never blows up the dashboard.
 _MAX_LOG_LINES = 500
-
-
-def _load_settings(path: str) -> Dict[str, Any]:
-    """Read and parse ``settings.json`` from ``path``."""
-    with open(path, "r", encoding="utf-8") as handle:
-        return json.load(handle)
-
 
 def _list_artifacts(output_dir: str) -> List[Dict[str, Any]]:
     """Return captured WAV / PNG artifacts, newest first.
@@ -169,11 +164,12 @@ def create_app(settings_path: Optional[str] = None) -> Flask:
         static_folder="static",
     )
     app.config["SETTINGS_PATH"] = settings_path or DEFAULT_SETTINGS_PATH
+    app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
 
     def _settings() -> Dict[str, Any]:
         # Re-read on every request so config edits show up without a
         # frontend restart. The file is small (~1 KB) so this is cheap.
-        return _load_settings(app.config["SETTINGS_PATH"])
+        return load_settings(app.config["SETTINGS_PATH"])
 
     def _output_dir(settings: Dict[str, Any]) -> str:
         return (settings.get("paths", {}) or {}).get("output_dir", "output")
@@ -186,6 +182,27 @@ def create_app(settings_path: Optional[str] = None) -> Flask:
         )
 
     # ------------------------------------------------------------- routes
+    @app.after_request
+    def _set_security_headers(response):
+        response.headers.setdefault("Cache-Control", "no-store")
+        response.headers.setdefault(
+            "Content-Security-Policy",
+            "default-src 'self'; "
+            "img-src 'self' data: blob:; "
+            "media-src 'self'; "
+            "style-src 'self' 'unsafe-inline'; "
+            "script-src 'self' 'unsafe-inline'; "
+            "object-src 'none'; "
+            "base-uri 'self'; "
+            "frame-ancestors 'none'; "
+            "form-action 'none'",
+        )
+        response.headers.setdefault("Referrer-Policy", "no-referrer")
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Cross-Origin-Resource-Policy", "same-site")
+        return response
+
     @app.route("/")
     def dashboard():
         settings = _settings()
@@ -209,11 +226,14 @@ def create_app(settings_path: Optional[str] = None) -> Flask:
     def api_status():
         settings = _settings()
         artifacts = _list_artifacts(_output_dir(settings))
+        passes, error = _safe_upcoming_passes(settings)
         return jsonify({
             "station": settings.get("station", {}),
             "health": _safe_health_snapshot(settings),
             "capture_count": len(artifacts),
             "image_count": sum(1 for a in artifacts if a["kind"] == "image"),
+            "next_pass": _serialize_pass(passes[0]) if passes else None,
+            "pass_prediction_error": error,
             "generated_at": datetime.now(timezone.utc).isoformat(),
         })
 
@@ -236,6 +256,15 @@ def create_app(settings_path: Optional[str] = None) -> Flask:
     def api_logs():
         return jsonify({
             "lines": _tail_log(_log_file(_settings()), max_lines=_MAX_LOG_LINES),
+        })
+
+    @app.route("/api/healthz")
+    def api_healthz():
+        return jsonify({
+            "status": "ok",
+            "service": "frontend",
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "config_path": current_app.config["SETTINGS_PATH"],
         })
 
     @app.route("/output/<path:filename>")

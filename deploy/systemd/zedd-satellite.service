@@ -1,0 +1,21 @@
+[Unit]
+Description=Zedd-Satellite capture daemon
+After=network-online.target time-sync.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=zedd-satellite
+Group=zedd-satellite
+WorkingDirectory=/opt/Zedd-Satellite
+ExecStart=/usr/bin/python3 /opt/Zedd-Satellite/main.py --config /opt/Zedd-Satellite/config/settings.json
+Restart=on-failure
+RestartSec=10
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/opt/Zedd-Satellite/output /opt/Zedd-Satellite/logs /opt/Zedd-Satellite/config
+
+[Install]
+WantedBy=multi-user.target

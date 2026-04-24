@@ -14,7 +14,7 @@ visible passes are picked up after a TLE refresh.
 
 from __future__ import annotations
 
-import json
+import argparse
 import logging
 import logging.handlers
 import os
@@ -29,6 +29,11 @@ from apscheduler.triggers.date import DateTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
 from core.capture import Capture, CaptureError, CaptureResult
+from core.config import (
+    SettingsValidationError,
+    load_settings,
+    run_startup_preflight,
+)
 from core.decoder import Decoder, DecoderError
 from core.gps import GPSReader
 from core.health import HealthMonitor, HealthSnapshot
@@ -42,25 +47,6 @@ DEFAULT_SETTINGS_PATH = os.path.join("config", "settings.json")
 PASS_REFRESH_INTERVAL_S = 3600  # Re-poll the tracker every hour.
 
 
-def load_settings(path: str = DEFAULT_SETTINGS_PATH) -> Dict:
-    """Load and parse the ``settings.json`` configuration file.
-
-    Args:
-        path: Path to the JSON configuration file.
-
-    Returns:
-        The parsed settings dictionary.
-
-    Raises:
-        FileNotFoundError: If the settings file does not exist.
-        ValueError: If the file is not valid JSON.
-    """
-    if not os.path.isfile(path):
-        raise FileNotFoundError(f"Settings file not found: {path}")
-    with open(path, "r", encoding="utf-8") as handle:
-        return json.load(handle)
-
-
 def configure_logging(settings: Dict) -> None:
     """Configure the root logger with a rotating file + stream handler.
 
@@ -71,6 +57,7 @@ def configure_logging(settings: Dict) -> None:
     log_dir = paths_cfg.get("log_dir", "logs")
     log_file = paths_cfg.get("log_file", os.path.join(log_dir, "zedd-satellite.log"))
     os.makedirs(log_dir, exist_ok=True)
+    os.makedirs(os.path.dirname(log_file) or ".", exist_ok=True)
 
     fmt = logging.Formatter(
         fmt="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -354,16 +341,29 @@ def main(argv: Optional[list] = None) -> int:
     Returns:
         Process exit code.
     """
-    del argv  # CLI parsing reserved for future use.
+    parser = argparse.ArgumentParser(
+        prog="python3 main.py",
+        description="Zedd-Satellite capture daemon.",
+    )
+    parser.add_argument(
+        "--config",
+        default=DEFAULT_SETTINGS_PATH,
+        help=f"Path to settings.json (default: {DEFAULT_SETTINGS_PATH}).",
+    )
+    args = parser.parse_args(argv)
     try:
-        settings = load_settings()
-    except (FileNotFoundError, ValueError) as exc:
+        settings = load_settings(args.config)
+        preflight_warnings = run_startup_preflight(settings, service="daemon")
+    except (FileNotFoundError, ValueError, SettingsValidationError) as exc:
         print(f"FATAL: cannot load settings: {exc}", file=sys.stderr)
         return 2
 
     configure_logging(settings)
     LOGGER.info("Loaded settings for station %r",
                 settings.get("station", {}).get("name", "<unnamed>"))
+    LOGGER.info("Using config file %s", args.config)
+    for warning in preflight_warnings:
+        LOGGER.warning("Startup preflight: %s", warning)
     Daemon(settings).run()
     return 0
 

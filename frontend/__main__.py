@@ -18,6 +18,8 @@ import logging
 import sys
 from typing import List, Optional
 
+from core.config import SettingsValidationError, load_settings, run_startup_preflight
+
 from .app import DEFAULT_SETTINGS_PATH, create_app
 
 
@@ -28,8 +30,8 @@ def _parse_args(argv: Optional[List[str]]) -> argparse.Namespace:
     )
     parser.add_argument(
         "--host",
-        default="0.0.0.0",
-        help="Interface to bind (default: 0.0.0.0, all interfaces).",
+        default="127.0.0.1",
+        help="Interface to bind (default: 127.0.0.1, loopback only).",
     )
     parser.add_argument(
         "--port",
@@ -56,6 +58,17 @@ def main(argv: Optional[List[str]] = None) -> int:
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     )
+    try:
+        settings = load_settings(args.config)
+        run_startup_preflight(settings, service="frontend")
+    except (FileNotFoundError, ValueError, SettingsValidationError) as exc:
+        print(f"FATAL: cannot load dashboard settings: {exc}", file=sys.stderr)
+        return 2
+    if args.host not in {"127.0.0.1", "localhost", "::1"}:
+        logging.warning(
+            "Binding the dashboard to %s exposes it beyond loopback; place it behind an authenticated TLS reverse proxy before production use.",
+            args.host,
+        )
     app = create_app(settings_path=args.config)
     app.run(host=args.host, port=args.port, debug=args.debug)
     return 0
