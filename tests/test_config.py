@@ -7,7 +7,7 @@ from unittest import mock
 
 from core.config import SettingsValidationError, load_settings, run_startup_preflight
 
-REPO_ROOT = "/home/runner/work/Zedd-Satellite/Zedd-Satellite"
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BASE_SETTINGS = os.path.join(REPO_ROOT, "config", "settings.json")
 
 

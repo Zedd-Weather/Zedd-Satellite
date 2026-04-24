@@ -168,7 +168,6 @@ not supported.
 
 Then open `http://127.0.0.1:8080/` locally or the authenticated reverse
 proxy endpoint. The dashboard surfaces:
-dashboard surfaces:
 
 * Station identity (name, lat/lon, elevation, timezone).
 * Current Pi 5 health snapshot (CPU temp, throttle / under-voltage
