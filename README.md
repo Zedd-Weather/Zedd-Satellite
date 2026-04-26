@@ -74,6 +74,7 @@ Zedd-Satellite/
 │   │   └── dashboard.html    # Server-rendered operator dashboard
 │   └── static/
 │       └── style.css         # Dark, dependency-free dashboard theme
+├── pinet_dapp/               # Minima-PiNet-Os DApp package
 ├── scripts/
 │   ├── update_tle.sh         # Downloads the latest TLE files
 │   └── setup_env.sh          # Installs apt + python dependencies
@@ -191,6 +192,24 @@ The front end is intentionally read-only — it only reads
 `config/settings.json`, `output/`, and `logs/`, and never mutates daemon
 state. It now emits restrictive security headers and defaults to a
 loopback-only bind so it can sit safely behind a reverse proxy.
+
+## Minima-PiNet-Os DApp
+
+The repository includes a static PiNet OS DApp in [`pinet_dapp/`](pinet_dapp).
+It follows the Minima-PiNet-Os DApp SDK manifest format and uses the
+PostMessage bridge to request `system.read`, `minima.rpc`, and
+`notifications` permissions from the PiNet OS host.
+
+To package it for sideloading:
+
+```bash
+cd pinet_dapp
+zip -r ../zedd-satellite-pinet-dapp.zip .
+```
+
+Install the archive from the PiNet OS DApp Store. The DApp can query the PiNet
+bridge for system and Minima node status, and links to the Flask dashboard that
+normally runs on `http://<pi-host>:8080/`.
 
 ## Validation and CI
 
