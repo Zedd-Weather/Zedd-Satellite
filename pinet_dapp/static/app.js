@@ -4,7 +4,8 @@
   var endpointInput = document.getElementById("satellite-endpoint");
   var openDashboard = document.getElementById("open-dashboard");
   var bridgeStatus = document.getElementById("bridge-status");
-  var DEFAULT_ENDPOINT = window.location.protocol + "//" + window.location.hostname + ":8080";
+  var DEFAULT_SATELLITE_PORT = "8080";
+  var DEFAULT_ENDPOINT = window.location.protocol + "//" + window.location.hostname + ":" + DEFAULT_SATELLITE_PORT;
 
   function setStatus(element, state, text) {
     element.className = "status " + state;
@@ -38,8 +39,26 @@
     return localStorage.getItem("zeddSatelliteEndpoint") || DEFAULT_ENDPOINT;
   }
 
+  function normalizeEndpoint(value) {
+    var candidate = (value || DEFAULT_ENDPOINT).trim();
+    if (!/^https?:\/\//i.test(candidate)) {
+      candidate = window.location.protocol + "//" + candidate;
+    }
+    try {
+      var parsed = new URL(candidate);
+      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+        return DEFAULT_ENDPOINT;
+      }
+      parsed.hash = "";
+      parsed.search = "";
+      return parsed.href.replace(/\/+$/, "");
+    } catch (error) {
+      return DEFAULT_ENDPOINT;
+    }
+  }
+
   function setEndpoint(value) {
-    var clean = value.replace(/\/+$/, "");
+    var clean = normalizeEndpoint(value);
     localStorage.setItem("zeddSatelliteEndpoint", clean);
     endpointInput.value = clean;
     openDashboard.href = clean + "/";
