@@ -4,12 +4,12 @@ import unittest
 
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DAPP_ROOT = os.path.join(REPO_ROOT, "pinet_dapp")
+PINET_DAPP_ROOT = os.path.join(REPO_ROOT, "pinet_dapp")
 
 
 class PiNetDAppTests(unittest.TestCase):
     def _load_manifest(self, name):
-        with open(os.path.join(DAPP_ROOT, name), "r", encoding="utf-8") as handle:
+        with open(os.path.join(PINET_DAPP_ROOT, name), "r", encoding="utf-8") as handle:
             return json.load(handle)
 
     def test_manifest_is_pinet_compatible(self):
@@ -41,17 +41,18 @@ class PiNetDAppTests(unittest.TestCase):
             "static/style.css",
         ]:
             self.assertTrue(
-                os.path.isfile(os.path.join(DAPP_ROOT, relative_path)),
+                os.path.isfile(os.path.join(PINET_DAPP_ROOT, relative_path)),
                 relative_path,
             )
 
     def test_bridge_uses_pinet_postmessage_protocol(self):
-        with open(os.path.join(DAPP_ROOT, "sdk", "pinet-sdk.js"), "r", encoding="utf-8") as handle:
+        with open(os.path.join(PINET_DAPP_ROOT, "sdk", "pinet-sdk.js"), "r", encoding="utf-8") as handle:
             bridge = handle.read()
 
         self.assertIn("pinet-bridge-request", bridge)
         self.assertIn("pinet-bridge-response", bridge)
         self.assertIn("window.parent.postMessage", bridge)
+        self.assertNotIn("}, \"*\")", bridge)
 
 
 if __name__ == "__main__":

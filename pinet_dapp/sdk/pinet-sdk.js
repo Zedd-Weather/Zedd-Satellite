@@ -5,6 +5,7 @@
   var RESPONSE_TYPE = "pinet-bridge-response";
   var REQUEST_TYPE = "pinet-bridge-request";
   var EVENT_TYPE = "pinet-bridge-event";
+  var TARGET_ORIGIN = window.location.origin;
   var listeners = {};
 
   function requestId() {
@@ -44,7 +45,7 @@
         requestId: id,
         method: method,
         params: params || {}
-      }, "*");
+      }, TARGET_ORIGIN);
     });
   }
 

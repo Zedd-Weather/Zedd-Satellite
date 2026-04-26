@@ -40,9 +40,13 @@
     return localStorage.getItem("zeddSatelliteEndpoint") || DEFAULT_ENDPOINT;
   }
 
+  function hasDisallowedScheme(value) {
+    return /^[a-z][a-z0-9+.-]*:/i.test(value) && !/^https?:\/\//i.test(value);
+  }
+
   function normalizeEndpoint(value) {
     var candidate = (value || DEFAULT_ENDPOINT).trim();
-    if (/^[a-z][a-z0-9+.-]*:/i.test(candidate) && !/^https?:\/\//i.test(candidate)) {
+    if (hasDisallowedScheme(candidate)) {
       return DEFAULT_ENDPOINT;
     }
     if (!/^https?:\/\//i.test(candidate)) {
@@ -65,7 +69,7 @@
     var clean = normalizeEndpoint(value);
     localStorage.setItem("zeddSatelliteEndpoint", clean);
     endpointInput.value = clean;
-    openDashboard.href = clean + "/";
+    openDashboard.href = clean;
   }
 
   function isLocalDashboardEndpoint(value) {
