@@ -5,7 +5,8 @@
   var openDashboard = document.getElementById("open-dashboard");
   var bridgeStatus = document.getElementById("bridge-status");
   var DEFAULT_SATELLITE_PORT = "8080";
-  var DEFAULT_ENDPOINT = window.location.protocol + "//" + window.location.hostname + ":" + DEFAULT_SATELLITE_PORT;
+  var DEFAULT_DASHBOARD_HOST = "localhost";
+  var DEFAULT_ENDPOINT = "http://" + DEFAULT_DASHBOARD_HOST + ":" + DEFAULT_SATELLITE_PORT;
 
   function setStatus(element, state, text) {
     element.className = "status " + state;
@@ -41,11 +42,11 @@
 
   function normalizeEndpoint(value) {
     var candidate = (value || DEFAULT_ENDPOINT).trim();
-    if (/^[a-z][a-z0-9+.-]*:\/\//i.test(candidate) && !/^https?:\/\//i.test(candidate)) {
+    if (/^[a-z][a-z0-9+.-]*:/i.test(candidate) && !/^https?:\/\//i.test(candidate)) {
       return DEFAULT_ENDPOINT;
     }
     if (!/^https?:\/\//i.test(candidate)) {
-      candidate = window.location.protocol + "//" + candidate;
+      candidate = "http://" + candidate;
     }
     try {
       var parsed = new URL(candidate);
@@ -65,6 +66,19 @@
     localStorage.setItem("zeddSatelliteEndpoint", clean);
     endpointInput.value = clean;
     openDashboard.href = clean + "/";
+  }
+
+  function isLocalDashboardEndpoint(value) {
+    try {
+      var parsed = new URL(value);
+      return (
+        (parsed.protocol === "http:" || parsed.protocol === "https:") &&
+        parsed.port === DEFAULT_SATELLITE_PORT &&
+        (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1")
+      );
+    } catch (error) {
+      return false;
+    }
   }
 
   function summarizeMinima(data) {
@@ -107,6 +121,14 @@
   }
 
   function refreshSatellite() {
+    if (!isLocalDashboardEndpoint(endpoint())) {
+      renderObject("satellite-status", {
+        Status: "Open dashboard directly for non-local endpoints",
+        Endpoint: endpoint()
+      });
+      return;
+    }
+
     fetch(endpoint() + "/api/status", {
       headers: { "Accept": "application/json" },
       cache: "no-store"

@@ -209,8 +209,9 @@ zip -r ../zedd-satellite-pinet-dapp.zip .
 ```
 
 Install the archive from the PiNet OS DApp Store. The DApp can query the PiNet
-bridge for system and Minima node status, and links to the Flask dashboard that
-normally runs on `http://<pi-host>:8080/`.
+bridge for system and Minima node status. Its embedded API preview is limited
+by CSP to `localhost:8080`/`127.0.0.1:8080`; for other dashboard hosts, use the
+in-DApp link to open the Flask dashboard directly.
 
 ## Validation and CI
 
