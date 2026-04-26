@@ -55,7 +55,8 @@ class PiNetDAppTests(unittest.TestCase):
         self.assertIn("pinet-bridge-request", bridge)
         self.assertIn("pinet-bridge-response", bridge)
         self.assertIn("window.parent.postMessage", bridge)
-        self.assertNotIn("}, \"*\")", bridge)
+        self.assertIn("TARGET_ORIGIN = window.location.origin", bridge)
+        self.assertIn("}, TARGET_ORIGIN)", bridge)
 
     def test_package_build_creates_installable_archive(self):
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -151,7 +151,7 @@
           Captures: payload.capture_count,
           Images: payload.image_count,
           "Next pass": nextPass.satellite || "None scheduled",
-          "Pass error": payload.pass_prediction_error || "None"
+          "Pass Error": payload.pass_prediction_error || "None"
         });
       })
       .catch(function (error) {
