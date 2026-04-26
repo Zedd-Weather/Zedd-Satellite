@@ -7,6 +7,9 @@ on:
       - master
       - 'copilot/**'
   pull_request:
+  release:
+    types:
+      - published
 
 permissions:
   contents: read
@@ -33,3 +36,38 @@ jobs:
 
       - name: Run compile check
         run: python -m compileall .
+
+  package-pinet-dapp:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4.2.2
+
+      - name: Set up Python
+        uses: actions/setup-python@v5.6.0
+        with:
+          python-version: '3.12'
+
+      - name: Build PiNet DApp package
+        run: python scripts/package_pinet_dapp.py --output-dir dist
+
+      - name: Upload PiNet DApp package artifact
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: zedd-satellite-pinet-dapp
+          path: |
+            dist/zedd-satellite-pinet-dapp-*.zip
+            dist/zedd-satellite-pinet-dapp-*.zip.sha256
+          if-no-files-found: error
+
+      - name: Publish PiNet DApp package to GitHub release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${{ github.event.release.tag_name }}" \
+            dist/zedd-satellite-pinet-dapp-*.zip \
+            dist/zedd-satellite-pinet-dapp-*.zip.sha256 \
+            --clobber

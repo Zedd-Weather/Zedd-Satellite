@@ -1,7 +1,10 @@
 import json
 import os
+import tempfile
 import unittest
+import zipfile
 
+from scripts.package_pinet_dapp import build_package
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PINET_DAPP_ROOT = os.path.join(REPO_ROOT, "pinet_dapp")
@@ -53,6 +56,24 @@ class PiNetDAppTests(unittest.TestCase):
         self.assertIn("pinet-bridge-response", bridge)
         self.assertIn("window.parent.postMessage", bridge)
         self.assertNotIn("}, \"*\")", bridge)
+
+    def test_package_build_creates_installable_archive(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            package_path = build_package(
+                dapp_root=os.path.abspath(PINET_DAPP_ROOT),
+                output_dir=os.path.abspath(temp_dir),
+            )
+
+            self.assertTrue(os.path.isfile(package_path))
+            self.assertTrue(os.path.isfile(f"{package_path}.sha256"))
+            with zipfile.ZipFile(package_path) as archive:
+                names = set(archive.namelist())
+
+        self.assertIn("dapp.json", names)
+        self.assertIn("manifest.json", names)
+        self.assertIn("index.html", names)
+        self.assertIn("sdk/pinet-sdk.js", names)
+        self.assertNotIn("pinet_dapp/index.html", names)
 
 
 if __name__ == "__main__":

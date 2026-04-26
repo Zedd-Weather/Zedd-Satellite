@@ -204,14 +204,18 @@ host.
 To package it for sideloading:
 
 ```bash
-cd pinet_dapp
-zip -r ../zedd-satellite-pinet-dapp.zip .
+python3 scripts/package_pinet_dapp.py
 ```
 
 Install the archive from the PiNet OS DApp Store. The DApp can query the PiNet
 bridge for system and Minima node status. Its embedded API preview is limited
 by CSP to `localhost:8080`/`127.0.0.1:8080`; for other dashboard hosts, use the
 in-DApp link to open the Flask dashboard directly.
+
+CI builds the same package on every push and pull request and uploads it as the
+`zedd-satellite-pinet-dapp` workflow artifact. When a GitHub release is
+published, CI also attaches `zedd-satellite-pinet-dapp-<version>.zip` and its
+`.sha256` checksum to the release so PiNet OS can install it from a stable URL.
 
 ## Validation and CI
 
