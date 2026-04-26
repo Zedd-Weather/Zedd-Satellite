@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' http: https:; img-src 'self' data:; style-src 'self'; script-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
+  <title>Zedd-Satellite · PiNet OS DApp</title>
+  <link rel="stylesheet" href="static/style.css">
+</head>
+<body>
+  <header class="hero">
+    <div class="brand">
+      <img src="icon.svg" alt="" width="48" height="48">
+      <div>
+        <p class="eyebrow">Minima-PiNet-Os DApp</p>
+        <h1>Zedd-Satellite</h1>
+      </div>
+    </div>
+    <p class="lede">
+      Monitor a weather satellite ground station from the PiNet OS desktop while
+      checking Minima node and Raspberry Pi system status through the DApp SDK bridge.
+    </p>
+  </header>
+
+  <main class="grid">
+    <section class="card">
+      <h2>PiNet bridge</h2>
+      <p id="bridge-status" class="status pending">Waiting for host response</p>
+      <div class="actions">
+        <button id="refresh-pinet" type="button">Refresh PiNet status</button>
+        <button id="notify" type="button">Send test notification</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>System stats</h2>
+      <dl id="system-stats" class="kv">
+        <dt>Status</dt><dd>Not loaded</dd>
+      </dl>
+    </section>
+
+    <section class="card">
+      <h2>Minima node</h2>
+      <dl id="minima-status" class="kv">
+        <dt>Status</dt><dd>Not loaded</dd>
+      </dl>
+    </section>
+
+    <section class="card wide">
+      <h2>Zedd-Satellite dashboard</h2>
+      <p>
+        The native Flask dashboard usually runs on port <code>8080</code> of the
+        same Pi. If browser CORS rules block embedded API reads, use the launch
+        button to open the dashboard directly.
+      </p>
+      <label for="satellite-endpoint">Dashboard base URL</label>
+      <div class="endpoint-row">
+        <input id="satellite-endpoint" type="url" spellcheck="false">
+        <button id="save-endpoint" type="button">Save</button>
+        <a id="open-dashboard" class="button-link" target="_blank" rel="noopener noreferrer">Open dashboard</a>
+      </div>
+      <dl id="satellite-status" class="kv">
+        <dt>Status</dt><dd>Not loaded</dd>
+      </dl>
+    </section>
+  </main>
+
+  <script src="sdk/pinet-sdk.js"></script>
+  <script src="static/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+{
+  "id": "org.zedd-weather.satellite",
+  "name": "Zedd-Satellite",
+  "description": "PiNet OS DApp for monitoring the Zedd-Satellite weather ground station and Minima node status.",
+  "version": "1.0.0",
+  "author": "Zedd-Weather",
+  "kind": "typescript",
+  "entry": "index.html",
+  "entryPoint": "index.html",
+  "icon": "icon.svg",
+  "color": "#38bdf8",
+  "permissions": [
+    "system.read",
+    "minima.rpc",
+    "notifications"
+  ],
+  "homepage": "https://github.com/Zedd-Weather/Zedd-Satellite",
+  "repository": "https://github.com/Zedd-Weather/Zedd-Satellite",
+  "license": "MIT",
+  "minPinetVersion": "1.1.0"
+}
