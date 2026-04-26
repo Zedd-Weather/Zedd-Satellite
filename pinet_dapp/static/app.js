@@ -41,6 +41,9 @@
 
   function normalizeEndpoint(value) {
     var candidate = (value || DEFAULT_ENDPOINT).trim();
+    if (/^[a-z][a-z0-9+.-]*:\/\//i.test(candidate) && !/^https?:\/\//i.test(candidate)) {
+      return DEFAULT_ENDPOINT;
+    }
     if (!/^https?:\/\//i.test(candidate)) {
       candidate = window.location.protocol + "//" + candidate;
     }
