@@ -17,5 +17,10 @@
   "homepage": "https://github.com/Zedd-Weather/Zedd-Satellite",
   "repository": "https://github.com/Zedd-Weather/Zedd-Satellite",
   "license": "MIT",
-  "minPinetVersion": "1.1.0"
+  "minPinetVersion": "1.1.0",
+  "minima": {
+    "protocol": "RMP",
+    "purpose": "provenance",
+    "peerExchange": "RNPE-2"
+  }
 }

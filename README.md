@@ -199,7 +199,8 @@ The repository includes a static PiNet OS DApp in [`pinet_dapp/`](pinet_dapp).
 It follows the Minima-PiNet-Os DApp SDK `typescript` manifest category for
 static frontend DApps and uses the PostMessage bridge to request
 `system.read`, `minima.rpc`, and `notifications` permissions from the PiNet OS
-host.
+host. The DApp manifest declares Minima RMP (Recursive Merkle Proof) for
+provenance and RNPE-2 (Recursive Network Peer Exchange) for peer exchange.
 
 To package it for sideloading:
 
