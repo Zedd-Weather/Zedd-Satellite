@@ -19,7 +19,8 @@
   "license": "MIT",
   "minPinetVersion": "1.1.0",
   "minima": {
-    "protocol": "RMPE-2",
-    "purpose": "provenance"
+    "protocol": "RMP",
+    "purpose": "provenance",
+    "peerExchange": "RNPE-2"
   }
 }
