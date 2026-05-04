@@ -25,6 +25,8 @@ class PiNetDAppTests(unittest.TestCase):
         self.assertIn("system.read", manifest["permissions"])
         self.assertIn("minima.rpc", manifest["permissions"])
         self.assertIn("notifications", manifest["permissions"])
+        self.assertEqual(manifest["minima"]["protocol"], "RMPE-2")
+        self.assertEqual(manifest["minima"]["purpose"], "provenance")
 
     def test_manifest_aliases_stay_in_sync(self):
         self.assertEqual(
